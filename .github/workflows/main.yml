@@ -21,19 +21,36 @@ jobs:
       - name: Install Dependencies
         run: |
           apk update
-          apk add musl-dev python3 py3-pip curl gcc python3-dev make nasm yasm pkgconf \
-                zlib-static zlib-dev openssl-dev perl patchelf scons linux-headers upx git
+          apk add musl-dev python3 curl gcc make nasm yasm pkgconf \
+                zlib-static zlib-dev openssl-dev perl patchelf scons linux-headers upx git \
+                sqlite-static sqlite-dev bzip2-static xz-static expat-static libffi-dev \
+                ncurses-static readline-static
 
       - name: Verify Compiler Setup
         run: |
           gcc --version
           ld --version
           pkg-config --version
-          pkg-config --libs --cflags openssl zlib || echo "pkg-config check failed, continuing..."
+          pkg-config --libs --cflags openssl zlib sqlite3 || echo "pkg-config check failed, continuing..."
+
+      - name: Build Static Python
+        run: |
+          curl -LO https://www.python.org/ftp/python/3.12.10/Python-3.12.10.tar.xz
+          tar -xJf Python-3.12.10.tar.xz
+          cd Python-3.12.10
+          ./configure --prefix=/usr/local/python --enable-optimizations --disable-shared \
+            --with-static-libpython --with-system-expat --with-system-ffi \
+            LDFLAGS="-static" CFLAGS="-I/usr/include" \
+            LIBS="-lsqlite3 -lbz2 -llzma -lz -lexpat -lncursesw -lreadline"
+          make -j$(nproc)
+          make install
+          cd ..
+          /usr/local/python/bin/python3 --version
+          ldd /usr/local/python/bin/python3 || echo "Python is static"
 
       - name: Set Up Python Virtual Environment
         run: |
-          python3 -m venv /tmp/venv
+          /usr/local/python/bin/python3 -m venv /tmp/venv
           . /tmp/venv/bin/activate
           pip install --upgrade pip
           pip install pyinstaller staticx yt-dlp==2025.05.22
@@ -81,7 +98,7 @@ jobs:
             --disable-libpulse \
             --disable-alsa \
             --extra-cflags="-I/usr/local/openssl/include -I/usr/include" \
-            --extra-ldflags="-L/usr/local/openssl/lib64 -L/usr/lib -static -lssl -lcrypto -lz -ldl -lpthread" \
+            --extra-ldflags="-L/usr/local/openssl/lib64 -L/usr/lib -static -lssl -lcrypto -lz -ldl -lpthread -lsqlite3 -lbz2 -llzma -lexpat -lncursesw -lreadline" \
             --pkg-config-flags="--static"
           make -j$(nproc)
           make install
@@ -102,6 +119,8 @@ jobs:
           curl -LO https://github.com/yt-dlp/yt-dlp/archive/refs/tags/2025.05.22.tar.gz
           tar -xzf 2025.05.22.tar.gz
           cd yt-dlp-2025.05.22
+          # Patch libraries to remove RPATH/RUNPATH
+          find /usr/lib -name "*.so*" -exec patchelf --remove-rpath {} \; || echo "No RPATH to remove"
           /tmp/venv/bin/pyinstaller --onefile --name yt-dlp \
             --add-binary "/usr/local/bin/ffmpeg:." \
             --add-binary "/usr/local/bin/ffprobe:." \
@@ -110,12 +129,15 @@ jobs:
             --hidden-import=yt_dlp.compat._deprecated \
             --hidden-import=yt_dlp.utils._legacy \
             --hidden-import=yt_dlp.utils._deprecated \
+            --exclude-module sqlite3 \
             yt_dlp/__main__.py
           if [ ! -f dist/yt-dlp ]; then
             echo "Error: yt-dlp binary not found in dist/"
             exit 1
           fi
-          /tmp/venv/bin/staticx dist/yt-dlp dist/yt-dlp-static
+          # Verify binary dependencies before staticx
+          ldd dist/yt-dlp || echo "PyInstaller binary is static"
+          /tmp/venv/bin/staticx --loglevel DEBUG dist/yt-dlp dist/yt-dlp-static
           if [ ! -f dist/yt-dlp-static ]; then
             echo "Error: yt-dlp-static binary not found in dist/"
             exit 1
@@ -150,7 +172,7 @@ jobs:
                 "src_urls": ["https://github.com/yt-dlp/yt-dlp"],
                 "build_script": "https://github.com/${{ github.repository }}/blob/main/.github/workflows/build-yt-dlp.yml",
                 "build_log": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-                "notes": ["Built with PyInstaller, static FFmpeg, static OpenSSL, and staticx"],
+                "notes": ["Built with PyInstaller, static FFmpeg, static OpenSSL, static Python, and staticx"],
                 "rank": 1000
               }
             ]
@@ -164,6 +186,17 @@ jobs:
           path: |
             yt-dlp-static-x86_64
             index.json
+            yt-dlp-2025.05.22/build/yt-dlp/warn-yt-dlp.txt
+            yt-dlp-2025.05.22/build/yt-dlp/xref-yt-dlp.html
+
+      - name: Upload PyInstaller Build Artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyinstaller-artifacts
+          path: |
+            yt-dlp-2025.05.22/build/yt-dlp/*
+            yt-dlp-2025.05.22/dist/yt-dlp
 
       - name: Create Release and Upload Binary
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
