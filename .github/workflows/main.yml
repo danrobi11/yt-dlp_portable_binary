@@ -23,15 +23,19 @@ jobs:
           apk update
           apk add musl-dev python3 curl gcc make nasm yasm pkgconf \
                 zlib-static zlib-dev openssl-dev perl patchelf scons linux-headers upx git \
-                sqlite-static sqlite-dev bzip2-static xz-static expat-static libffi-dev \
-                ncurses-static readline-static
+                sqlite-static sqlite-dev bzip2-static xz-static expat-static expat-dev \
+                libffi-dev ncurses-static readline-static libxcrypt-static
 
-      - name: Verify Compiler Setup
+      - name: Verify Compiler and Library Setup
         run: |
           gcc --version
           ld --version
           pkg-config --version
-          pkg-config --libs --cflags openssl zlib sqlite3 || echo "pkg-config check failed, continuing..."
+          pkg-config --libs --cflags openssl zlib sqlite3 expat || echo "pkg-config check failed, continuing..."
+          find /usr/include -name expat.h || echo "expat.h not found"
+          find /usr/include -name openssl/ssl.h || echo "openssl/ssl.h not found"
+          find /usr/lib -name libexpat.a || echo "libexpat.a not found"
+          find /usr/lib -name libcrypto.a || echo "libcrypto.a not found"
 
       - name: Build Static Python
         run: |
@@ -39,14 +43,21 @@ jobs:
           tar -xJf Python-3.12.10.tar.xz
           cd Python-3.12.10
           ./configure --prefix=/usr/local/python --enable-optimizations --disable-shared \
-            --with-static-libpython --with-system-expat --with-system-ffi \
-            LDFLAGS="-static" CFLAGS="-I/usr/include" \
-            LIBS="-lsqlite3 -lbz2 -llzma -lz -lexpat -lncursesw -lreadline"
+            --with-static-libpython --with-system-expat \
+            LDFLAGS="-static -L/usr/lib" CFLAGS="-I/usr/include" \
+            LIBS="-lsqlite3 -lbz2 -llzma -lz -lexpat -lncursesw -lreadline -lcrypt -lssl -lcrypto -ldl -lpthread"
           make -j$(nproc)
           make install
           cd ..
           /usr/local/python/bin/python3 --version
           ldd /usr/local/python/bin/python3 || echo "Python is static"
+
+      - name: Upload Python Build Log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-build-log
+          path: Python-3.12.10/config.log
 
       - name: Set Up Python Virtual Environment
         run: |
@@ -98,7 +109,7 @@ jobs:
             --disable-libpulse \
             --disable-alsa \
             --extra-cflags="-I/usr/local/openssl/include -I/usr/include" \
-            --extra-ldflags="-L/usr/local/openssl/lib64 -L/usr/lib -static -lssl -lcrypto -lz -ldl -lpthread -lsqlite3 -lbz2 -llzma -lexpat -lncursesw -lreadline" \
+            --extra-ldflags="-L/usr/local/openssl/lib64 -L/usr/lib -static -lssl -lcrypto -lz -ldl -lpthread -lsqlite3 -lbz2 -llzma -lexpat -lncursesw -lreadline -lcrypt" \
             --pkg-config-flags="--static"
           make -j$(nproc)
           make install
@@ -129,7 +140,6 @@ jobs:
             --hidden-import=yt_dlp.compat._deprecated \
             --hidden-import=yt_dlp.utils._legacy \
             --hidden-import=yt_dlp.utils._deprecated \
-            --exclude-module sqlite3 \
             yt_dlp/__main__.py
           if [ ! -f dist/yt-dlp ]; then
             echo "Error: yt-dlp binary not found in dist/"
@@ -197,6 +207,13 @@ jobs:
           path: |
             yt-dlp-2025.05.22/build/yt-dlp/*
             yt-dlp-2025.05.22/dist/yt-dlp
+
+      - name: Upload staticx Artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staticx-artifacts
+          path: /tmp/staticx-*
 
       - name: Create Release and Upload Binary
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
