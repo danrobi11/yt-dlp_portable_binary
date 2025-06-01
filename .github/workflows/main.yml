@@ -1,0 +1,166 @@
+name: Build Static yt-dlp Binary
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:3.22
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          apk update
+          apk add musl-dev python3 py3-pip curl gcc python3-dev make nasm yasm pkgconf zlib-static perl patchelf scons linux-headers upx git
+
+      - name: Set Up Python Virtual Environment
+        run: |
+          python3 -m venv /tmp/venv
+          . /tmp/venv/bin/activate
+          pip install pyinstaller staticx yt-dlp==2025.05.22
+
+      - name: Build Static OpenSSL
+        run: |
+          curl -LO https://www.openssl.org/source/openssl-3.3.0.tar.gz
+          tar -xzf openssl-3.3.0.tar.gz
+          cd openssl-3.3.0
+          ./Configure no-shared --prefix=/usr/local/openssl
+          make -j$(nproc)
+          make install_sw
+          cd ..
+
+      - name: Build Static FFmpeg
+        run: |
+          curl -LO https://ffmpeg.org/releases/ffmpeg-6.1.2.tar.gz
+          tar -xzf ffmpeg-6.1.2.tar.gz
+          cd ffmpeg-6.1.2
+          ./configure --prefix=/usr/local \
+            --disable-shared \
+            --enable-static \
+            --disable-all \
+            --enable-avcodec \
+            --enable-avformat \
+            --enable-swresample \
+            --enable-swscale \
+            --enable-ffmpeg \
+            --enable-ffprobe \
+            --enable-demuxer=mp4,mov,flv,hls \
+            --enable-muxer=mp4 \
+            --enable-protocol=file,http,https,tcp,tls \
+            --enable-decoder=aac,mp3,h264,h265 \
+            --enable-encoder=aac \
+            --enable-filter=aresample,scale \
+            --enable-zlib \
+            --enable-openssl \
+            --enable-avdevice \
+            --enable-avfilter \
+            --enable-indev=lavfi \
+            --disable-xlib \
+            --disable-sdl2 \
+            --disable-ffplay \
+            --disable-libpulse \
+            --disable-alsa \
+            --extra-cflags="-I/usr/local/openssl/include" \
+            --extra-ldflags="-L/usr/local/openssl/lib -static -lssl -lcrypto -lz"
+          make -j$(nproc)
+          make install
+          cd ..
+
+      - name: Verify FFmpeg Binaries
+        run: |
+          ls -l /usr/local/bin
+          if [ ! -f /usr/local/bin/ffmpeg ] || [ ! -f /usr/local/bin/ffprobe ]; then
+            echo "Error: FFmpeg or FFprobe binaries not found in /usr/local/bin"
+            exit 1
+          fi
+          ldd /usr/local/bin/ffmpeg || echo "FFmpeg is static"
+          ldd /usr/local/bin/ffprobe || echo "FFprobe is static"
+
+      - name: Build yt-dlp
+        run: |
+          curl -LO https://github.com/yt-dlp/yt-dlp/archive/refs/tags/2025.05.22.tar.gz
+          tar -xzf 2025.05.22.tar.gz
+          cd yt-dlp-2025.05.22
+          /tmp/venv/bin/pyinstaller --onefile --name yt-dlp \
+            --add-binary "/usr/local/bin/ffmpeg:." \
+            --add-binary "/usr/local/bin/ffprobe:." \
+            --log-level DEBUG \
+            --hidden-import=yt_dlp.compat._legacy \
+            --hidden-import=yt_dlp.compat._deprecated \
+            --hidden-import=yt_dlp.utils._legacy \
+            --hidden-import=yt_dlp.utils._deprecated \
+            yt_dlp/__main__.py
+          if [ ! -f dist/yt-dlp ]; then
+            echo "Error: yt-dlp binary not found in dist/"
+            exit 1
+          fi
+          /tmp/venv/bin/staticx dist/yt-dlp dist/yt-dlp-static
+          if [ ! -f dist/yt-dlp-static ]; then
+            echo "Error: yt-dlp-static binary not found in dist/"
+            exit 1
+          fi
+          ldd dist/yt-dlp-static || echo "Static or self-contained binary confirmed"
+          mv dist/yt-dlp-static ../yt-dlp-static-x86_64
+          cd ..
+
+      - name: Compress Binary with UPX
+        run: |
+          upx --best yt-dlp-static-x86_64
+
+      - name: Generate dbin Index
+        run: |
+          SIZE=$(ls -lh yt-dlp-static-x86_64 | awk '{print $5}')
+          BSUM=$(b3sum yt-dlp-static-x86_64 | cut -d' ' -f1)
+          SHASUM=$(sha256sum yt-dlp-static-x86_64 | cut -d' ' -f1)
+          cat <<EOF > index.json
+          {
+            "MyRepo": [
+              {
+                "pkg": "yt-dlp",
+                "pkg_name": "yt-dlp",
+                "pkg_id": "github.com/yt-dlp/yt-dlp",
+                "description": "A feature-rich command-line audio/video downloader",
+                "version": "2025.05.22",
+                "download_url": "https://github.com/${{ github.repository }}/releases/download/latest/yt-dlp-static-x86_64",
+                "size": "$SIZE",
+                "bsum": "$BSUM",
+                "shasum": "$SHASUM",
+                "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+                "src_urls": ["https://github.com/yt-dlp/yt-dlp"],
+                "build_script": "https://github.com/${{ github.repository }}/blob/main/.github/workflows/build-yt-dlp.yml",
+                "build_log": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                "notes": ["Built with PyInstaller, static FFmpeg, static OpenSSL, and staticx"],
+                "rank": 1000
+              }
+            ]
+          }
+          EOF
+
+      - name: Upload Binary and Index
+        uses: actions/upload-artifact@v4
+        with:
+          name: yt-dlp-static
+          path: |
+            yt-dlp-static-x86_64
+            index.json
+
+      - name: Create Release and Upload Binary
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          files: |
+            yt-dlp-static-x86_64
+            index.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
