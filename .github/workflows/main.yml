@@ -21,12 +21,21 @@ jobs:
       - name: Install Dependencies
         run: |
           apk update
-          apk add musl-dev python3 py3-pip curl gcc python3-dev make nasm yasm pkgconf zlib-static perl patchelf scons linux-headers upx git
+          apk add musl-dev python3 py3-pip curl gcc python3-dev make nasm yasm pkgconf \
+                zlib-static zlib-dev openssl-dev perl patchelf scons linux-headers upx git
+
+      - name: Verify Compiler Setup
+        run: |
+          gcc --version
+          ld --version
+          pkg-config --version
+          pkg-config --libs --cflags openssl zlib || echo "pkg-config check failed, continuing..."
 
       - name: Set Up Python Virtual Environment
         run: |
           python3 -m venv /tmp/venv
           . /tmp/venv/bin/activate
+          pip install --upgrade pip
           pip install pyinstaller staticx yt-dlp==2025.05.22
 
       - name: Build Static OpenSSL
@@ -34,10 +43,11 @@ jobs:
           curl -LO https://www.openssl.org/source/openssl-3.3.0.tar.gz
           tar -xzf openssl-3.3.0.tar.gz
           cd openssl-3.3.0
-          ./Configure no-shared --prefix=/usr/local/openssl
+          ./Configure no-shared --prefix=/usr/local/openssl --openssldir=/usr/local/openssl/ssl
           make -j$(nproc)
           make install_sw
           cd ..
+          ls -l /usr/local/openssl/lib64 || echo "OpenSSL lib64 directory not found"
 
       - name: Build Static FFmpeg
         run: |
@@ -70,8 +80,9 @@ jobs:
             --disable-ffplay \
             --disable-libpulse \
             --disable-alsa \
-            --extra-cflags="-I/usr/local/openssl/include" \
-            --extra-ldflags="-L/usr/local/openssl/lib -static -lssl -lcrypto -lz"
+            --extra-cflags="-I/usr/local/openssl/include -I/usr/include" \
+            --extra-ldflags="-L/usr/local/openssl/lib64 -L/usr/lib -static -lssl -lcrypto -lz -ldl -lpthread" \
+            --pkg-config-flags="--static"
           make -j$(nproc)
           make install
           cd ..
