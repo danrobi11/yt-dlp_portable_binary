@@ -52,9 +52,12 @@ jobs:
           make install
           ldconfig
           cd ..
-          /usr/local/python/bin/python3 --version
-          /usr/local/python/bin/python3 -c "import ssl, hashlib, bz2, lzma, sqlite3, array, binascii, _ctypes, _struct, _io, _json, _random, _bisect, _heapq, _pickle, _csv, zlib" || echo "Module import failed"
           ls -l /usr/local/python/lib/libpython3.12.so* || echo "Python shared library not found"
+          ldconfig -p | grep libpython3.12 || echo "libpython3.12 not in linker cache"
+          ldd /usr/local/python/bin/python3 || echo "ldd failed"
+          export LD_LIBRARY_PATH=/usr/local/python/lib:$LD_LIBRARY_PATH
+          /usr/local/python/bin/python3 --version || echo "Python version check failed"
+          /usr/local/python/bin/python3 -c "import ssl, hashlib, bz2, lzma, sqlite3, array, binascii, _ctypes, _struct, _io, _json, _random, _bisect, _heapq, _pickle, _csv, zlib" || echo "Module import failed"
 
       - name: Upload Python Build Log
         if: failure()
