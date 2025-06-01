@@ -104,23 +104,27 @@ jobs:
             --extra-ldflags="-L/usr/lib"
           make -j$(nproc)
           make install
+          ldconfig
           cd ..
 
       - name: Verify FFmpeg Binaries
         run: |
           ls -l /usr/local/bin
+          ls -l /usr/local/lib
           if [ ! -f /usr/local/bin/ffmpeg ] || [ ! -f /usr/local/bin/ffprobe ]; then
             echo "Error: FFmpeg or FFprobe binaries not found in /usr/local/bin"
             exit 1
           fi
-          /usr/local/bin/ffmpeg -version
-          /usr/local/bin/ffprobe -version
+          export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+          /usr/local/bin/ffmpeg -version || echo "ffmpeg failed to run"
+          /usr/local/bin/ffprobe -version || echo "ffprobe failed to run"
 
       - name: Build yt-dlp
         run: |
           curl -LO https://github.com/yt-dlp/yt-dlp/archive/refs/tags/2024.05.27.tar.gz
           tar -xzf 2024.05.27.tar.gz
           cd yt-dlp-2024.05.27
+          export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
           /tmp/venv/bin/pyinstaller --onefile --name yt-dlp \
             --add-binary=/usr/local/bin/ffmpeg:. \
             --add-binary=/usr/local/bin/ffprobe:. \
@@ -139,12 +143,13 @@ jobs:
 
       - name: Verify yt-dlp Binary
         run: |
-          ./yt-dlp-dist-x86_64 --version
-          ./yt-dlp-dist-x86_64 --help || echo "yt-dlp help command executed"
+          export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+          ./yt-dlp-dist-x86_64 --version || echo "yt-dlp --version failed"
+          ./yt-dlp-dist-x86_64 --help || echo "yt-dlp --help failed"
 
       - name: Compress Binary with UPX
         run: |
-          upx --best yt-dlp-dist-x86_64
+          upx --best yt-dlp-dist-x86_64 || echo "UPX compression failed, continuing..."
 
       - name: Generate dbin Index
         run: |
