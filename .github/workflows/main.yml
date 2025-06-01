@@ -65,18 +65,19 @@ jobs:
             LIBS="-lsqlite3 -lbz2 -llzma -lz -lexpat -lncurses -lreadline -lssl -lcrypto -ldl -lpthread -lm" \
             --disable-test-modules
           # Force static modules in Setup.local
-          cat <<EOF > Modules/Setup.local
+          cat > Modules/Setup.local <<'EOF'
 *static*
 array _array.c
 _hashlib _hashopenssl.c -lssl -lcrypto
 _ssl _ssl.c -lssl -lcrypto
-_sqlite3 _sqlite/cache.c _sqlite/connection.c _sqlite/cursor.c _sqlite/microprotocols.c \
-_sqlite/module.c _sqlite/prepare_protocol.c _sqlite/row.c _sqlite/statement.c _sqlite/util.c -lsqlite3
+_sqlite3 _sqlite/cache.c _sqlite/connection.c _sqlite/cursor.c _sqlite/microprotocols.c _sqlite/module.c _sqlite/prepare_protocol.c _sqlite/row.c _sqlite/statement.c _sqlite/util.c -lsqlite3
 bz2 _bz2module.c -lbz2
 lzma _lzmamodule.c -llzma
 zlib zlibmodule.c -lz
 EOF
-          # Remove -fPIC and -shared from Makefile
+          # Remove shared object flags from Makefile
+          sed -i 's/-shared//g' Makefile
+          sed -i 's/-fPIC//g' Makefile
           make -j$(nproc) LINKFORSHARED="" CFLAGSFORSHARED=""
           make install
           cd ..
@@ -201,7 +202,7 @@ EOF
                 "shasum": "$SHASUM",
                 "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
                 "src_urls": ["https://github.com/yt-dlp/yt-dlp"],
-                "build_script": "https://github.com/${{ github.repository }}/blob/main/.github/workflows/build-yt-dlp.yml",
+                "build_script": "https://github.com/${{ github.repository }}/blob/main/.github/workflows/main.yml",
                 "build_log": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
                 "notes": ["Built with PyInstaller, static FFmpeg, static OpenSSL, static Python, and staticx"],
                 "rank": 1000
