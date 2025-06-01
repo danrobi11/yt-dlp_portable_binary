@@ -62,16 +62,14 @@ jobs:
             CFLAGS="-I/usr/include -I/usr/local/openssl/include" \
             LIBS="-lsqlite3 -lbz2 -llzma -lz -lexpat -lncurses -lreadline -lssl -lcrypto -ldl -lpthread -lm -lpython3.12" \
             --disable-test-modules
-          cat > Modules/Setup.local <<'EOF'
-*static*
-array _array.c
-_hashlib _hashopenssl.c -lssl -lcrypto
-_ssl _ssl.c -lssl -lcrypto
-_sqlite3 _sqlite/cache.c _sqlite/connection.c _sqlite/cursor.c _sqlite/microprotocols.c _sqlite/module.c _sqlite/prepare_protocol.c _sqlite/row.c _sqlite/statement.c _sqlite/util.c -lsqlite3
-bz2 _bz2module.c -lbz2
-lzma _lzmamodule.c -llzma
-zlib zlibmodule.c -lz
-EOF
+          echo '*static*' > Modules/Setup.local
+          echo 'array _array.c' >> Modules/Setup.local
+          echo '_hashlib _hashopenssl.c -lssl -lcrypto' >> Modules/Setup.local
+          echo '_ssl _ssl.c -lssl -lcrypto' >> Modules/Setup.local
+          echo '_sqlite3 _sqlite/cache.c _sqlite/connection.c _sqlite/cursor.c _sqlite/microprotocols.c _sqlite/module.c _sqlite/prepare_protocol.c _sqlite/row.c _sqlite/statement.c _sqlite/util.c -lsqlite3' >> Modules/Setup.local
+          echo 'bz2 _bz2module.c -lbz2' >> Modules/Setup.local
+          echo 'lzma _lzmamodule.c -llzma' >> Modules/Setup.local
+          echo 'zlib zlibmodule.c -lz' >> Modules/Setup.local
           sed -i 's/-shared//g; s/-fPIC//g; s/-fprofile-generate//g' Makefile
           make -j$(nproc) LINKFORSHARED="" CFLAGSFORSHARED=""
           make install
