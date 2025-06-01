@@ -62,7 +62,6 @@ jobs:
             CFLAGS="-I/usr/include -I/usr/local/openssl/include" \
             LIBS="-lsqlite3 -lbz2 -llzma -lz -lexpat -lncurses -lreadline -lssl -lcrypto -ldl -lpthread -lm -lpython3.12" \
             --disable-test-modules
-          # Force static modules
           cat > Modules/Setup.local <<'EOF'
 *static*
 array _array.c
@@ -73,9 +72,7 @@ bz2 _bz2module.c -lbz2
 lzma _lzmamodule.c -llzma
 zlib zlibmodule.c -lz
 EOF
-          # Remove shared object flags
-          sed -i 's/-shared//g' Makefile
-          sed -i 's/-fPIC//g' Makefile
+          sed -i 's/-shared//g; s/-fPIC//g; s/-fprofile-generate//g' Makefile
           make -j$(nproc) LINKFORSHARED="" CFLAGSFORSHARED=""
           make install
           cd ..
@@ -165,7 +162,7 @@ EOF
             exit 1
           fi
           ldd dist/yt-dlp || echo "PyInstaller binary is static"
-          /tmp/venv/bin/staticx --loglevel DEBUG dist/yt-dlp dist/yt-dlp-static
+          /tmp/venv/bin/staticx --loglevel=DEBUG dist/yt-dlp dist/yt-dlp-static
           if [ ! -f dist/yt-dlp-static ]; then
             echo "Error: yt-dlp-static binary not found in dist/"
             exit 1
