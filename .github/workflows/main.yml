@@ -44,16 +44,17 @@ jobs:
           curl -LO https://www.python.org/ftp/python/3.12.10/Python-3.12.10.tar.xz
           tar -xJf Python-3.12.10.tar.xz
           cd Python-3.12.10
-          ./configure --prefix=/usr/local/python --enable-optimizations \
+          ./configure --prefix=/usr/local/python --enable-optimizations --enable-shared \
             --with-system-expat --with-openssl=/usr \
             CFLAGS="-I/usr/include" \
-            LDFLAGS="-L/usr/lib" \
-            --disable-test-modules
+            LDFLAGS="-L/usr/lib"
           make -j$(nproc)
           make install
+          ldconfig
           cd ..
           /usr/local/python/bin/python3 --version
           /usr/local/python/bin/python3 -c "import ssl, hashlib, bz2, lzma, sqlite3, array, binascii, _ctypes, _struct, _io, _json, _random, _bisect, _heapq, _pickle, _csv, zlib" || echo "Module import failed"
+          ls -l /usr/local/python/lib/libpython3.12.so* || echo "Python shared library not found"
 
       - name: Upload Python Build Log
         if: failure()
@@ -64,6 +65,7 @@ jobs:
 
       - name: Set Up Python Virtual Environment
         run: |
+          export LD_LIBRARY_PATH=/usr/local/python/lib:$LD_LIBRARY_PATH
           /usr/local/python/bin/python3 -m venv /tmp/venv
           . /tmp/venv/bin/activate
           pip install --upgrade pip
@@ -124,7 +126,7 @@ jobs:
           curl -LO https://github.com/yt-dlp/yt-dlp/archive/refs/tags/2024.05.27.tar.gz
           tar -xzf 2024.05.27.tar.gz
           cd yt-dlp-2024.05.27
-          export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+          export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/python/lib:$LD_LIBRARY_PATH
           /tmp/venv/bin/pyinstaller --onefile --name yt-dlp \
             --add-binary=/usr/local/bin/ffmpeg:. \
             --add-binary=/usr/local/bin/ffprobe:. \
@@ -143,7 +145,7 @@ jobs:
 
       - name: Verify yt-dlp Binary
         run: |
-          export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+          export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/python/lib:$LD_LIBRARY_PATH
           ./yt-dlp-dist-x86_64 --version || echo "yt-dlp --version failed"
           ./yt-dlp-dist-x86_64 --help || echo "yt-dlp --help failed"
 
