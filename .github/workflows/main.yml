@@ -23,8 +23,9 @@ jobs:
           apt-get update
           apt-get install -y build-essential curl nasm yasm pkg-config \
             zlib1g-dev libbz2-dev liblzma-dev libexpat1-dev libsqlite3-dev \
-            libncurses-dev libreadline-dev libffi-dev upx-ucl git python3 python3-dev python3-venv
-          dpkg -l | grep -E 'zlib1g-dev|libsqlite3-dev|libbz2-dev|liblzma-dev|libexpat1-dev' || exit 1
+            libncurses-dev libreadline-dev libffi-dev upx-ucl git python3 python3-dev python3-venv \
+            libc6-dev
+          dpkg -l | grep -E 'zlib1g-dev|libsqlite3-dev|libbz2-dev|liblzma-dev|libexpat1-dev|libc6-dev' || exit 1
 
       - name: Verify Compiler and Library Setup
         run: |
@@ -36,6 +37,7 @@ jobs:
           find /usr/include -name zlib.h || echo "zlib.h not found"
           find /usr/lib -name libexpat.a || echo "libexpat.a not found"
           find /usr/lib -name libz.a || echo "libz.a not found"
+          find /usr/lib -name libc.a || echo "libc.a not found"
 
       - name: Build Static OpenSSL
         run: |
@@ -55,11 +57,11 @@ jobs:
           curl -LO https://www.python.org/ftp/python/3.12.10/Python-3.12.10.tar.xz
           tar -xJf Python-3.12.10.tar.xz
           cd Python-3.12.10
-          ./configure --prefix=/usr/local/python --enable-optimizations --disable-shared \
+          ./configure --prefix=/usr/local/python --disable-shared \
             --with-static-libpython --with-system-expat --with-openssl=/usr/local/openssl \
             LDFLAGS="-static -L/usr/lib -L/usr/local/openssl/lib64" \
             CFLAGS="-I/usr/include -I/usr/local/openssl/include" \
-            LIBS="-lsqlite3 -lbz2 -llzma -lz -lexpat -lncurses -lreadline -lssl -lcrypto -ldl -lpthread -lm" \
+            LIBS="-lsqlite3 -lbz2 -llzma -lz -lexpat -lncurses -lreadline -lssl -lcrypto -lpthread -lm" \
             --disable-test-modules
           echo '*static*' > Modules/Setup.local
           echo 'array _array.c' >> Modules/Setup.local
@@ -69,13 +71,23 @@ jobs:
           echo 'bz2 _bz2module.c -lbz2' >> Modules/Setup.local
           echo 'lzma _lzmamodule.c -llzma' >> Modules/Setup.local
           echo 'zlib zlibmodule.c -lz' >> Modules/Setup.local
-          sed -i 's/-shared//g; s/-fPIC//g; s/-fprofile-generate//g' Makefile
+          echo 'binascii binascii.c -lz' >> Modules/Setup.local
+          echo '_ctypes _ctypes.c -lffi' >> Modules/Setup.local
+          echo '_struct _struct.c' >> Modules/Setup.local
+          echo '_io _io/bufferedio.c _io/bytesio.c _io/fileio.c _io/iobase.c _io/stringio.c _io/textio.c _io/_iomodule.c' >> Modules/Setup.local
+          echo '_json _json.c' >> Modules/Setup.local
+          echo '_random _randommodule.c' >> Modules/Setup.local
+          echo '_bisect _bisectmodule.c' >> Modules/Setup.local
+          echo '_heapq _heapqmodule.c' >> Modules/Setup.local
+          echo '_pickle _pickle.c' >> Modules/Setup.local
+          echo '_csv _csv.c' >> Modules/Setup.local
+          sed -i 's/-shared//g; s/-fPIC//g; s/-fprofile-generate//g; s/-fprofile-use//g' Makefile
           make -j$(nproc) LINKFORSHARED="" CFLAGSFORSHARED=""
           make install
           cd ..
           /usr/local/python/bin/python3 --version
           ldd /usr/local/python/bin/python3 || echo "Python is static"
-          /usr/local/python/bin/python3 -c "import ssl, hashlib, bz2, lzma, sqlite3, array" || echo "Module import failed"
+          /usr/local/python/bin/python3 -c "import ssl, hashlib, bz2, lzma, sqlite3, array, binascii, _ctypes, _struct, _io, _json, _random, _bisect, _heapq, _pickle, _csv" || echo "Module import failed"
           if [ -f Python-3.12.10/config.log ]; then
             echo "Dumping config.log for debugging:"
             cat Python-3.12.10/config.log
@@ -127,7 +139,7 @@ jobs:
             --disable-libpulse \
             --disable-alsa \
             --extra-cflags="-I/usr/local/openssl/include -I/usr/include" \
-            --extra-ldflags="-L/usr/local/openssl/lib64 -L/usr/lib -static -lssl -lcrypto -lz -ldl -lpthread -lsqlite3 -lbz2 -llzma -lexpat -lncurses -lreadline -lm" \
+            --extra-ldflags="-L/usr/local/openssl/lib64 -L/usr/lib -static -lssl -lcrypto -lz -lpthread -lsqlite3 -lbz2 -llzma -lexpat -lncurses -lreadline -lm" \
             --pkg-config-flags="--static"
           make -j$(nproc)
           make install
