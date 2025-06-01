@@ -72,7 +72,7 @@ jobs:
           /usr/local/python/bin/python3 -m venv /tmp/venv
           . /tmp/venv/bin/activate
           pip install --upgrade pip
-          pip install pyinstaller yt-dlp==2024.05.27 certifi websockets
+          pip install pyinstaller yt-dlp==2025.05.22 certifi websockets
 
       - name: Build FFmpeg
         run: |
@@ -126,9 +126,9 @@ jobs:
 
       - name: Build yt-dlp
         run: |
-          curl -LO https://github.com/yt-dlp/yt-dlp/archive/refs/tags/2024.05.27.tar.gz
-          tar -xzf 2024.05.27.tar.gz
-          cd yt-dlp-2024.05.27
+          curl -LO https://github.com/yt-dlp/yt-dlp/archive/refs/tags/2025.05.22.tar.gz
+          tar -xzf 2025.05.22.tar.gz
+          cd yt-dlp-2025.05.22
           export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/python/lib:$LD_LIBRARY_PATH
           /tmp/venv/bin/pyinstaller --onefile --name yt-dlp \
             --add-binary=/usr/local/bin/ffmpeg:. \
@@ -158,8 +158,8 @@ jobs:
           name: yt-dlp-binary
           path: |
             yt-dlp-dist-x86_64
-            yt-dlp-2024.05.27/build/yt-dlp/warn-yt-dlp.txt
-            yt-dlp-2024.05.27/build/yt-dlp/xref-yt-dlp.html
+            yt-dlp-2025.05.22/build/yt-dlp/warn-yt-dlp.txt
+            yt-dlp-2025.05.22/build/yt-dlp/xref-yt-dlp.html
 
       - name: Upload PyInstaller Build Artifacts
         if: failure()
@@ -167,5 +167,5 @@ jobs:
         with:
           name: pyinstaller-artifacts
           path: |
-            yt-dlp-2024.05.27/build/yt-dlp/*
-            yt-dlp-2024.05.27/dist/yt-dlp
+            yt-dlp-2025.05.22/build/yt-dlp/*
+            yt-dlp-2025.05.22/dist/yt-dlp
