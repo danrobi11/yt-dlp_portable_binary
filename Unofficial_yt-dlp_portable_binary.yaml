@@ -126,7 +126,7 @@ jobs:
 
       - name: Build yt-dlp
         run: |
-          git clone --branch main https://github.com/yt-dlp/yt-dlp.git
+          git clone --branch master https://github.com/yt-dlp/yt-dlp.git
           cd yt-dlp
           export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/python/lib:$LD_LIBRARY_PATH
           /tmp/venv/bin/pyinstaller --onefile --name yt-dlp \
