@@ -1,6 +1,6 @@
 # Unofficial yt-dlp Portable Binary
 
-This repository provides a GitHub Actions workflow to build a portable `yt-dlp` binary (version 2025.05.22) for Linux systems. The binary is dynamically linked, includes FFmpeg, and is verified to launch successfully.
+This repository provides a GitHub Actions workflow to build a portable `yt-dlp` binary against the master branch for Linux systems. The binary is dynamically linked, includes FFmpeg, and is verified to launch successfully.
 
 ## About
 
@@ -8,7 +8,7 @@ This repository provides a GitHub Actions workflow to build a portable `yt-dlp` 
 
 ## Features
 
-- Builds `yt-dlp` version 2025.05.22.
+- Builds `yt-dlp` against master branch.
 - Includes FFmpeg for post-processing capabilities.
 - Produces a dynamically linked binary for x86_64 Linux systems.
 - Verifies binary functionality with `--version` and `--help` commands.
