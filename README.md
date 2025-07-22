@@ -51,7 +51,7 @@ The GitHub Actions workflow (`.github/workflows/main.yml`) performs the followin
 - Installs dependencies in a `debian:bullseye-slim` container.
 - Builds Python 3.12.10 with shared libraries.
 - Builds FFmpeg 6.1.2 with required codecs and protocols.
-- Installs `yt-dlp` 2025.05.22 and dependencies via `pip`.
+- Installs `yt-dlp` against master branch and dependencies via `pip`.
 - Uses `PyInstaller` to create a standalone `yt-dlp` binary.
 - Verifies the binary’s functionality.
 - Uploads the binary and logs as artifacts.
